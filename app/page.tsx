@@ -106,7 +106,7 @@ const rooms = [
   {
     icon: "✉",
     name: "For Her",
-    href: "/for-her",
+    href: "/forher",
     image: forHerImage,
     wide: true,
   },
