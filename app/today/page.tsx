@@ -20,6 +20,10 @@ export default function TodayPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  /* ================================================================ */
+  /* TODAY                                                            */
+  /* ================================================================ */
+
   const today = useMemo(() => {
     const date = new Date();
 
@@ -33,6 +37,10 @@ export default function TodayPage() {
       }),
     };
   }, []);
+
+  /* ================================================================ */
+  /* LOAD TODAY'S MEMORIES                                            */
+  /* ================================================================ */
 
   useEffect(() => {
     const loadTodayMemories = async () => {
@@ -57,8 +65,10 @@ export default function TodayPage() {
 
       if (error) {
         console.error("Failed to load memories:", error);
+
         setError("Unable to load today's memories.");
         setLoading(false);
+
         return;
       }
 
@@ -99,7 +109,7 @@ export default function TodayPage() {
           className="object-cover object-center"
         />
 
-        {/* Dark overlay for readability */}
+        {/* Overlay */}
         <div className="absolute inset-0 bg-black/30" />
 
         {/* Hero content */}
@@ -139,10 +149,13 @@ export default function TodayPage() {
       {/* CONTENT                                                          */}
       {/* ================================================================ */}
 
-      <section className="px-5 pb-20 pt-16 sm:px-10 sm:pb-32 sm:pt-24">
-        <div className="mx-auto max-w-6xl">
+      <section className="px-4 pb-24 pt-14 sm:px-8 sm:pb-32 sm:pt-20">
+        <div className="mx-auto max-w-4xl">
 
-          {/* Loading */}
+          {/* ============================================================ */}
+          {/* LOADING                                                       */}
+          {/* ============================================================ */}
+
           {loading && (
             <div className="flex min-h-[35vh] items-center justify-center text-center">
               <p className="text-[10px] uppercase tracking-[0.3em] text-[#81766d]">
@@ -151,114 +164,274 @@ export default function TodayPage() {
             </div>
           )}
 
-          {/* Error */}
+          {/* ============================================================ */}
+          {/* ERROR                                                         */}
+          {/* ============================================================ */}
+
           {!loading && error && (
             <div className="flex min-h-[35vh] flex-col items-center justify-center text-center">
-              <p className="font-serif text-2xl text-[#8b4b3f]">
+
+              <div className="font-serif text-5xl text-[#8b4b3f]/30">
+                ♡
+              </div>
+
+              <p className="mt-6 font-serif text-2xl text-[#8b4b3f]">
                 Something went wrong.
               </p>
 
               <p className="mt-3 text-sm text-[#81766d]">
                 {error}
               </p>
+
             </div>
           )}
 
-          {/* No memories */}
+          {/* ============================================================ */}
+          {/* NO MEMORIES                                                   */}
+          {/* ============================================================ */}
+
           {!loading && !error && memories.length === 0 && (
             <div className="flex min-h-[40vh] flex-col items-center justify-center py-24 text-center sm:py-32">
 
-              <div className="font-serif text-5xl text-[#5d3928]/30">
+              <div className="font-serif text-6xl text-[#5d3928]/25">
                 ♡
               </div>
 
-              <h2 className="mt-7 text-center font-serif text-3xl sm:text-4xl">
+              <h2 className="mt-7 font-serif text-3xl sm:text-4xl">
                 Nothing happened today.
               </h2>
 
-              <p className="mx-auto mt-4 max-w-md text-center text-sm leading-7 text-[#81766d]">
+              <p className="mx-auto mt-4 max-w-md text-sm leading-7 text-[#81766d]">
                 No memories were saved for this day.
                 <br />
                 Maybe today is waiting to become one.
               </p>
+
             </div>
           )}
 
-          {/* Memories */}
+          {/* ============================================================ */}
+          {/* MEMORIES                                                      */}
+          {/* ============================================================ */}
+
           {!loading && !error && memories.length > 0 && (
-            <div className="space-y-8">
+            <div className="space-y-24">
 
-              {memories.map((memory) => (
-                <article
-                  key={memory.id}
-                  className="overflow-hidden rounded-md bg-[#ebe4da]"
-                >
-                  <div className="grid md:grid-cols-[1fr_1fr]">
+              {memories.map((memory) => {
+                const memoryDate = new Date(
+                  `${memory.date}T00:00:00`
+                );
 
-                    {/* Text */}
-                    <div className="flex flex-col justify-center p-7 sm:p-10 lg:p-14">
+                const year = memoryDate.getFullYear();
 
-                      <p className="text-[9px] uppercase tracking-[0.28em] text-[#8b4b3f]">
-                        {new Date(
-                          `${memory.date}T00:00:00`
-                        ).getFullYear()}
-                      </p>
+                const formattedDate =
+                  memoryDate.toLocaleDateString("en-US", {
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  });
 
-                      <h2 className="mt-4 font-serif text-3xl leading-tight sm:text-4xl">
+                const media = memory.media ?? [];
+
+                const mainImage = media[0];
+
+                const thumbnails = media.slice(1);
+
+                return (
+                  <article
+                    key={memory.id}
+                    className="mx-auto max-w-3xl"
+                  >
+
+                    {/* ================================================== */}
+                    {/* MEMORY HEADER                                      */}
+                    {/* ================================================== */}
+
+                    <div className="text-center">
+
+                      {/* Top navigation */}
+                      <div className="mb-10 flex items-center justify-between">
+
+                        <a
+                          href="/today"
+                          className="text-[9px] font-medium uppercase tracking-[0.2em] text-[#81766d] transition hover:text-[#28231f]"
+                        >
+                          ← Back to today
+                        </a>
+
+                        <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-[#81766d]">
+                          {year}
+                        </span>
+
+                      </div>
+
+                      {/* Title */}
+                      <h2 className="font-serif text-4xl leading-tight tracking-[-0.02em] sm:text-5xl md:text-6xl">
                         {memory.title}
                       </h2>
 
-                      {memory.description && (
-                        <p className="mt-5 max-w-lg text-sm leading-7 text-[#81766d]">
-                          {memory.description}
-                        </p>
-                      )}
+                      {/* Decorative line */}
+                      <div className="mx-auto mt-6 h-px w-10 bg-[#8b4b3f]/50" />
 
-                      {memory.location && (
-                        <p className="mt-6 text-[9px] uppercase tracking-[0.2em] text-[#81766d]">
-                          {memory.location}
-                        </p>
-                      )}
-                    </div>
+                      {/* Metadata */}
+                      <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
 
-                    {/* Media */}
-                    <div className="bg-[#ddd4ca]">
+                        <span className="flex items-center gap-2 text-[9px] uppercase tracking-[0.15em] text-[#81766d]">
+                          <span className="text-sm">
+                            ▣
+                          </span>
 
-                      {memory.media.length > 0 ? (
-                        <div
-                          className={`grid ${
-                            memory.media.length === 1
-                              ? "grid-cols-1"
-                              : "grid-cols-2"
-                          }`}
-                        >
-                          {memory.media.map((url, index) => (
-                            <div
-                              key={`${memory.id}-${index}`}
-                              className="relative aspect-square overflow-hidden"
-                            >
-                              <Image
-                                src={url}
-                                alt={memory.title}
-                                fill
-                                sizes="(max-width: 768px) 50vw, 25vw"
-                                className="object-cover transition duration-700 hover:scale-105"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex aspect-[4/3] items-center justify-center">
-                          <span className="font-serif text-4xl text-[#5d3928]/20">
+                          {formattedDate}
+                        </span>
+
+                        {memory.location && (
+                          <span className="flex items-center gap-2 text-[9px] uppercase tracking-[0.15em] text-[#81766d]">
+                            <span className="text-sm">
+                              ♧
+                            </span>
+
+                            {memory.location}
+                          </span>
+                        )}
+
+                        <span className="flex items-center gap-2 text-[9px] uppercase tracking-[0.15em] text-[#81766d]">
+                          <span className="text-sm">
                             ♡
                           </span>
-                        </div>
-                      )}
+
+                          A perfect moment
+                        </span>
+
+                      </div>
 
                     </div>
-                  </div>
-                </article>
-              ))}
+
+                    {/* ================================================== */}
+                    {/* MAIN IMAGE                                         */}
+                    {/* ================================================== */}
+
+                    {mainImage ? (
+                      <div className="mt-9 overflow-hidden rounded-lg bg-[#ddd4ca] shadow-[0_15px_45px_rgba(50,35,25,0.10)]">
+
+                        <div className="relative aspect-[16/10] w-full">
+
+                          <Image
+                            src={mainImage}
+                            alt={memory.title}
+                            fill
+                            sizes="(max-width: 768px) 100vw, 768px"
+                            className="object-cover transition duration-700 hover:scale-[1.015]"
+                          />
+
+                        </div>
+
+                      </div>
+                    ) : (
+                      <div className="mt-9 flex aspect-[16/10] items-center justify-center rounded-lg bg-[#ddd4ca]">
+
+                        <span className="font-serif text-6xl text-[#5d3928]/20">
+                          ♡
+                        </span>
+
+                      </div>
+                    )}
+
+                    {/* ================================================== */}
+                    {/* IMAGE THUMBNAILS                                   */}
+                    {/* ================================================== */}
+
+                    {thumbnails.length > 0 && (
+                      <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+
+                        {thumbnails.map((url, index) => (
+                          <div
+                            key={`${memory.id}-${index}`}
+                            className="relative aspect-[4/3] overflow-hidden rounded-md bg-[#ddd4ca]"
+                          >
+
+                            <Image
+                              src={url}
+                              alt={`${memory.title} photo ${
+                                index + 2
+                              }`}
+                              fill
+                              sizes="(max-width: 640px) 33vw, 180px"
+                              className="object-cover transition duration-500 hover:scale-105"
+                            />
+
+                          </div>
+                        ))}
+
+                      </div>
+                    )}
+
+                    {/* ================================================== */}
+                    {/* DESCRIPTION                                         */}
+                    {/* ================================================== */}
+
+                    {memory.description && (
+                      <div className="mx-auto mt-10 max-w-2xl text-center">
+
+                        <div className="mb-6 font-serif text-xl text-[#8b4b3f]/40">
+                          ♡
+                        </div>
+
+                        <p className="whitespace-pre-line font-serif text-base leading-8 text-[#4c433d] sm:text-lg">
+                          {memory.description}
+                        </p>
+
+                      </div>
+                    )}
+
+                    {/* ================================================== */}
+                    {/* BOTTOM ACTIONS                                     */}
+                    {/* ================================================== */}
+
+                    <div className="mt-12 flex items-center justify-between border-t border-black/[0.07] pt-6">
+
+                      {/* Share */}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (navigator.share) {
+                            await navigator.share({
+                              title: memory.title,
+                              text:
+                                memory.description ??
+                                memory.title,
+                              url: window.location.href,
+                            });
+                          }
+                        }}
+                        className="text-[9px] uppercase tracking-[0.2em] text-[#81766d] transition hover:text-[#28231f]"
+                      >
+                        ♧ &nbsp; Share
+                      </button>
+
+                      {/* Right side */}
+                      <div className="flex items-center gap-5">
+
+                        <a
+                          href={`/memories?edit=${memory.id}`}
+                          className="text-[9px] uppercase tracking-[0.2em] text-[#81766d] transition hover:text-[#28231f]"
+                        >
+                          ✎ &nbsp; Edit
+                        </a>
+
+                        <button
+                          type="button"
+                          className="text-[9px] uppercase tracking-[0.2em] text-[#81766d] transition hover:text-[#8b4b3f]"
+                        >
+                          ♢ &nbsp; Delete
+                        </button>
+
+                      </div>
+
+                    </div>
+
+                  </article>
+                );
+              })}
 
             </div>
           )}
