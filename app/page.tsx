@@ -52,7 +52,7 @@ const rooms = [
   {
     icon: "♢",
     name: "Her Wardrobe",
-    href: "/collection/wardrobe",
+    href: "/collection/her_wardrobe",
     image: wardrobeImage,
   },
   {
