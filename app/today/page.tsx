@@ -487,13 +487,12 @@ export default function TodayPage() {
             <h2 className="mt-4 font-serif text-3xl leading-tight sm:text-4xl">
               {memories.length > 0
                 ? "Remember when?"
-                : "Nothing happened today."}
+                : "Looking back..."}
             </h2>
 
             {memories.length > 0 && (
               <p className="mx-auto mt-4 max-w-lg text-sm leading-7 text-[#81766d]">
-                Moments from this day,
-                across the years.
+                Moments from this day, across the years.
               </p>
             )}
 
