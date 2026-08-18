@@ -6,20 +6,42 @@ import { supabase } from "@/lib/supabase";
 
 import clock from "@/assets/year.jpg";
 
+// ============================================================================
+// TYPES
+// ============================================================================
+
 type Memory = {
   id: string;
   title: string;
   description: string | null;
   date: string;
   location: string | null;
-  media: string[];
+  media: unknown;
 };
 
+type SignedMedia = {
+  path: string;
+  signedUrl: string;
+  type: "image" | "video";
+};
+
+type MemoryWithMedia = Omit<Memory, "media"> & {
+  media: string[];
+  signedMedia: SignedMedia[];
+};
+
+// ============================================================================
+// PAGE
+// ============================================================================
+
 export default function TodayPage() {
-  const [memories, setMemories] = useState<Memory[]>([]);
-  const [allTodayMemories, setAllTodayMemories] = useState<Memory[]>([]);
+  const [memories, setMemories] = useState<MemoryWithMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // ==========================================================================
+  // TODAY
+  // ==========================================================================
 
   const today = useMemo(() => {
     const date = new Date();
@@ -37,103 +59,362 @@ export default function TodayPage() {
     };
   }, []);
 
+  // ==========================================================================
+  // MEDIA TYPE
+  // ==========================================================================
+
+  const getMediaType = (
+    path: string
+  ): "image" | "video" => {
+    const cleanPath = path
+      .split("?")[0]
+      .split("#")[0];
+
+    const extension = cleanPath
+      .split(".")
+      .pop()
+      ?.toLowerCase();
+
+    const videoExtensions = [
+      "mp4",
+      "webm",
+      "mov",
+      "m4v",
+      "avi",
+      "mkv",
+      "ogg",
+    ];
+
+    return extension &&
+      videoExtensions.includes(extension)
+      ? "video"
+      : "image";
+  };
+
+  // ==========================================================================
+  // STORAGE URL -> STORAGE PATH
+  // ==========================================================================
+
+  const getStoragePath = (value: string): string => {
+    const cleanValue = value.trim();
+
+    if (!cleanValue) {
+      return "";
+    }
+
+    if (!cleanValue.startsWith("http")) {
+      return cleanValue;
+    }
+
+    try {
+      const url = new URL(cleanValue);
+
+      const marker = "/storage/v1/object/";
+      const markerIndex = url.pathname.indexOf(marker);
+
+      if (markerIndex === -1) {
+        return cleanValue;
+      }
+
+      let path = url.pathname.substring(
+        markerIndex + marker.length
+      );
+
+      path = path.replace(/^public\//, "");
+      path = path.replace(/^sign\//, "");
+      path = path.replace(/^authenticated\//, "");
+
+      if (path.startsWith("media/")) {
+        path = path.substring("media/".length);
+      }
+
+      return decodeURIComponent(path);
+    } catch {
+      return cleanValue;
+    }
+  };
+
+  // ==========================================================================
+  // EXTRACT MEDIA PATHS
+  // ==========================================================================
+
+  const extractMediaPaths = (value: unknown): string[] => {
+    if (value === null || value === undefined) {
+      return [];
+    }
+
+    // ARRAY
+    if (Array.isArray(value)) {
+      return value
+        .flatMap((item) => extractMediaPaths(item))
+        .filter(Boolean);
+    }
+
+    // STRING
+    if (typeof value === "string") {
+      const cleanValue = value.trim();
+
+      if (!cleanValue) {
+        return [];
+      }
+
+      // JSON array
+      if (
+        cleanValue.startsWith("[") &&
+        cleanValue.endsWith("]")
+      ) {
+        try {
+          const parsed = JSON.parse(cleanValue);
+
+          return extractMediaPaths(parsed);
+        } catch {
+          // Continue below.
+        }
+      }
+
+      // PostgreSQL array
+      if (
+        cleanValue.startsWith("{") &&
+        cleanValue.endsWith("}")
+      ) {
+        const inside = cleanValue.slice(1, -1);
+
+        if (!inside.trim()) {
+          return [];
+        }
+
+        return inside
+          .split(",")
+          .map((item) =>
+            item
+              .trim()
+              .replace(/^"(.*)"$/, "$1")
+              .replace(/\\"/g, '"')
+          )
+          .filter(Boolean);
+      }
+
+      // Full Supabase URL
+      if (cleanValue.startsWith("http")) {
+        const path = getStoragePath(cleanValue);
+
+        return path ? [path] : [];
+      }
+
+      // Normal storage path
+      return [cleanValue];
+    }
+
+    return [];
+  };
+
+  // ==========================================================================
+  // CREATE SIGNED URLS
+  // ==========================================================================
+
+  const createSignedUrls = async (
+    storagePaths: string[]
+  ): Promise<Record<string, string>> => {
+    if (storagePaths.length === 0) {
+      return {};
+    }
+
+    const cleanPaths = storagePaths
+      .map((path) => getStoragePath(path))
+      .filter(Boolean);
+
+    if (cleanPaths.length === 0) {
+      return {};
+    }
+
+    const { data, error } = await supabase.storage
+      .from("media")
+      .createSignedUrls(cleanPaths, 60 * 60 * 24);
+
+    if (error) {
+      console.error(
+        "Failed to create signed URLs:",
+        error
+      );
+
+      return {};
+    }
+
+    const result: Record<string, string> = {};
+
+    for (const item of data ?? []) {
+      if (item.path && item.signedUrl) {
+        result[item.path] = item.signedUrl;
+      }
+    }
+
+    return result;
+  };
+
+  // ==========================================================================
+  // LOAD TODAY'S MEMORIES
+  // ==========================================================================
+
   useEffect(() => {
+    let mounted = true;
+
     const loadTodayMemories = async () => {
       setLoading(true);
       setError(null);
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      try {
+        // --------------------------------------------------------------------
+        // AUTH
+        // --------------------------------------------------------------------
 
-      if (!session) {
-        window.location.replace("/login");
-        return;
-      }
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      const { data, error } = await supabase
-        .from("memories")
-        .select(
-          "id, title, description, date, location, media"
-        )
-        .order("date", { ascending: false });
+        if (!session) {
+          window.location.replace("/login");
+          return;
+        }
 
-      if (error) {
-        console.error("Failed to load memories:", error);
-        setError("Unable to load today's memories.");
-        setLoading(false);
-        return;
-      }
+        // --------------------------------------------------------------------
+        // GET MEMORIES
+        // --------------------------------------------------------------------
 
-      const matchingMemories = (data ?? []).filter((memory) => {
-        const [year, month, day] = memory.date
-          .split("-")
-          .map(Number);
+        const { data, error: databaseError } =
+          await supabase
+            .from("memories")
+            .select(
+              "id, title, description, date, location, media"
+            )
+            .order("date", {
+              ascending: false,
+            });
 
-        return (
-          month === today.month &&
-          day === today.day
+        if (databaseError) {
+          throw databaseError;
+        }
+
+        // --------------------------------------------------------------------
+        // FILTER BY MONTH + DAY
+        // --------------------------------------------------------------------
+
+        const matchingMemories = (data ?? []).filter(
+          (memory) => {
+            const [, month, day] = memory.date
+              .split("-")
+              .map(Number);
+
+            return (
+              month === today.month &&
+              day === today.day
+            );
+          }
         );
-      });
 
-      setAllTodayMemories(matchingMemories);
+        // --------------------------------------------------------------------
+        // CREATE SIGNED MEDIA
+        // --------------------------------------------------------------------
 
-      /*
-       * Current memories shown in the main section.
-       * All memories are kept available for the
-       * "More from this day" section below.
-       */
-      setMemories(matchingMemories);
+        const loadedMemories: MemoryWithMedia[] = [];
 
-      setLoading(false);
+        for (const memory of matchingMemories) {
+          const mediaPaths = extractMediaPaths(
+            memory.media
+          );
+
+          const cleanPaths = mediaPaths
+            .map((path) => getStoragePath(path))
+            .filter(Boolean);
+
+          const signedUrls = await createSignedUrls(
+            cleanPaths
+          );
+
+          const signedMedia: SignedMedia[] =
+            cleanPaths
+              .map((path) => {
+                const signedUrl = signedUrls[path];
+
+                if (!signedUrl) {
+                  return null;
+                }
+
+                return {
+                  path,
+                  signedUrl,
+                  type: getMediaType(path),
+                };
+              })
+              .filter(
+                (
+                  item
+                ): item is SignedMedia =>
+                  item !== null
+              );
+
+          loadedMemories.push({
+            id: memory.id,
+            title: memory.title,
+            description: memory.description,
+            date: memory.date,
+            location: memory.location,
+            media: mediaPaths,
+            signedMedia,
+          });
+        }
+
+        if (mounted) {
+          setMemories(loadedMemories);
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load today's memories:",
+          error
+        );
+
+        if (mounted) {
+          setError(
+            "Unable to load today's memories."
+          );
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
     };
 
     loadTodayMemories();
+
+    return () => {
+      mounted = false;
+    };
   }, [today.day, today.month]);
 
-  /*
-   * Get one representative memory for each year.
-   *
-   * Example:
-   * 2026 → first memory from 2026
-   * 2025 → first memory from 2025
-   * 2024 → first memory from 2024
-   */
-  const memoriesByYear = useMemo(() => {
-    const grouped = new Map<number, Memory>();
+  // ==========================================================================
+  // DATE FORMAT
+  // ==========================================================================
 
-    allTodayMemories.forEach((memory) => {
-      const year = new Date(
-        `${memory.date}T00:00:00`
-      ).getFullYear();
-
-      if (!grouped.has(year)) {
-        grouped.set(year, memory);
-      }
+  const formatDate = (date: string) => {
+    return new Date(
+      `${date}T00:00:00`
+    ).toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
     });
+  };
 
-    return Array.from(grouped.entries())
-      .sort((a, b) => b[0] - a[0]);
-  }, [allTodayMemories]);
-
-  /*
-   * Years other than the current year.
-   *
-   * These are what appear under:
-   * "More from this day"
-   */
-  const previousYears = useMemo(() => {
-    return memoriesByYear.filter(
-      ([year]) => year !== today.year
-    );
-  }, [memoriesByYear, today.year]);
+  // ==========================================================================
+  // PAGE
+  // ==========================================================================
 
   return (
     <main className="min-h-[100svh] bg-[#f4f0ea] text-[#28231f]">
 
-      {/* ================================================================ */}
-      {/* HERO                                                             */}
-      {/* ================================================================ */}
+      {/* ================================================================== */}
+      {/* HERO                                                              */}
+      {/* ================================================================== */}
 
       <section className="relative h-[55svh] min-h-[420px] w-full overflow-hidden sm:h-[60svh] sm:min-h-[500px]">
 
@@ -148,13 +429,24 @@ export default function TodayPage() {
 
         <div className="absolute inset-0 bg-black/30" />
 
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6 text-center text-white">
+        {/* HOME */}
+
+        <a
+          href="/"
+          className="absolute left-5 top-5 z-20 text-[10px] font-medium uppercase tracking-[0.25em] text-white/80 transition hover:text-white sm:left-10 sm:top-8"
+        >
+          ← Our Home
+        </a>
+
+        {/* HERO TEXT */}
+
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6 text-center">
 
           <p className="mb-5 text-[10px] font-medium uppercase tracking-[0.35em] text-white/80 sm:text-xs">
             On this day
           </p>
 
-          <h1 className="font-sans text-5xl font-bold tracking-tight sm:text-7xl md:text-8xl">
+          <h1 className="font-serif text-5xl leading-none tracking-tight sm:text-7xl md:text-8xl">
             {today.formatted}
           </h1>
 
@@ -165,318 +457,300 @@ export default function TodayPage() {
           </p>
         </div>
 
-        <a
-          href="/"
-          className="absolute left-5 top-5 z-20 text-[10px] font-medium uppercase tracking-[0.25em] text-white/80 transition hover:text-white sm:left-10 sm:top-8"
-        >
-          ← Our Home
-        </a>
+        {/* SCROLL */}
 
         <div className="absolute bottom-7 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2 text-[9px] uppercase tracking-[0.3em] text-white/60">
           <span>Scroll</span>
           <span className="text-sm">↓</span>
         </div>
+
       </section>
 
-      {/* ================================================================ */}
-      {/* CONTENT                                                          */}
-      {/* ================================================================ */}
+      {/* ================================================================== */}
+      {/* CONTENT                                                            */}
+      {/* ================================================================== */}
 
-      <section className="px-5 pb-20 pt-16 sm:px-10 sm:pb-32 sm:pt-24">
-        <div className="mx-auto max-w-6xl">
+      <section className="px-5 pb-24 pt-16 sm:px-10 sm:pb-36 sm:pt-24">
 
-          {/* Loading */}
+        <div className="mx-auto w-full max-w-5xl">
+
+          {/* ================================================================= */}
+          {/* INTRO                                                             */}
+          {/* ================================================================= */}
+
+          <div className="mx-auto mb-16 w-full max-w-2xl text-center sm:mb-20">
+
+            <p className="text-[9px] uppercase tracking-[0.3em] text-[#8b4b3f]">
+              A little piece of our story
+            </p>
+
+            <h2 className="mt-4 font-serif text-3xl leading-tight sm:text-4xl">
+              {memories.length > 0
+                ? "Remember when?"
+                : "Nothing happened today."}
+            </h2>
+
+            {memories.length > 0 && (
+              <p className="mx-auto mt-4 max-w-lg text-sm leading-7 text-[#81766d]">
+                Moments from this day,
+                across the years.
+              </p>
+            )}
+
+          </div>
+
+          {/* ================================================================= */}
+          {/* LOADING                                                           */}
+          {/* ================================================================= */}
+
           {loading && (
             <div className="flex min-h-[35vh] items-center justify-center text-center">
+
               <p className="text-[10px] uppercase tracking-[0.3em] text-[#81766d]">
                 Looking through our memories...
               </p>
+
             </div>
           )}
 
-          {/* Error */}
+          {/* ================================================================= */}
+          {/* ERROR                                                             */}
+          {/* ================================================================= */}
+
           {!loading && error && (
-            <div className="flex min-h-[35vh] flex-col items-center justify-center text-center">
-              <p className="font-serif text-2xl text-[#8b4b3f]">
-                Something went wrong.
-              </p>
+            <div className="mx-auto flex min-h-[35vh] max-w-lg flex-col items-center justify-center text-center">
 
-              <p className="mt-3 text-sm text-[#81766d]">
-                {error}
-              </p>
-            </div>
-          )}
-
-          {/* ============================================================ */}
-          {/* NO MEMORIES                                                   */}
-          {/* ============================================================ */}
-
-          {!loading && !error && memories.length === 0 && (
-            <div className="flex min-h-[40vh] flex-col items-center justify-center py-24 text-center sm:py-32">
-
-              <div className="font-serif text-5xl text-[#5d3928]/30">
+              <div className="font-serif text-5xl text-[#5d3928]/25">
                 ♡
               </div>
 
-              <h2 className="mt-7 text-center font-serif text-3xl sm:text-4xl">
-                Nothing happened today.
+              <h2 className="mt-6 font-serif text-3xl">
+                Something went wrong.
               </h2>
 
-              <p className="mx-auto mt-4 max-w-md text-center text-sm leading-7 text-[#81766d]">
-                No memories were saved for this day.
-                <br />
-                Maybe today is waiting to become one.
+              <p className="mt-3 text-sm leading-7 text-[#81766d]">
+                {error}
               </p>
+
             </div>
           )}
 
-          {/* ============================================================ */}
-          {/* MEMORIES                                                      */}
-          {/* ============================================================ */}
+          {/* ================================================================= */}
+          {/* EMPTY                                                             */}
+          {/* ================================================================= */}
 
-          {!loading && !error && memories.length > 0 && (
-            <>
-              <div className="space-y-8">
+          {!loading &&
+            !error &&
+            memories.length === 0 && (
+              <div className="mx-auto flex min-h-[40vh] max-w-lg flex-col items-center justify-center pb-16 text-center">
+
+                <div className="font-serif text-6xl text-[#5d3928]/20">
+                  ♡
+                </div>
+
+                <h2 className="mt-7 font-serif text-3xl leading-tight sm:text-4xl">
+                  Nothing happened today.
+                </h2>
+
+                <p className="mx-auto mt-4 max-w-md text-sm leading-7 text-[#81766d]">
+                  No memories were saved for
+                  this day.
+                  <br />
+                  Maybe today is waiting to
+                  become one.
+                </p>
+
+              </div>
+            )}
+
+          {/* ================================================================= */}
+          {/* MEMORIES                                                          */}
+          {/* ================================================================= */}
+
+          {!loading &&
+            !error &&
+            memories.length > 0 && (
+              <div className="w-full space-y-24 sm:space-y-32">
 
                 {memories.map((memory) => (
                   <article
                     key={memory.id}
-                    className="overflow-hidden rounded-md bg-[#ebe4da]"
+                    className="w-full"
                   >
 
-                    {/* -------------------------------------------------- */}
-                    {/* Memory header                                      */}
-                    {/* -------------------------------------------------- */}
+                    {/* ===================================================== */}
+                    {/* MEMORY TEXT                                            */}
+                    {/* ===================================================== */}
 
-                    <div className="px-6 pt-8 text-center sm:px-10 sm:pt-10">
+                    <div className="mx-auto w-full max-w-3xl text-center">
 
-                      <a
-                        href="/memories"
-                        className="text-[9px] uppercase tracking-[0.25em] text-[#81766d] transition hover:text-[#28231f]"
-                      >
-                        ← Back to all memories
-                      </a>
+                      {/* DATE */}
 
-                      <p className="mt-8 text-[9px] uppercase tracking-[0.28em] text-[#8b4b3f]">
-                        {new Date(
-                          `${memory.date}T00:00:00`
-                        ).toLocaleDateString("en-US", {
-                          month: "long",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
+                      <p className="text-[9px] font-medium uppercase tracking-[0.28em] text-[#8b4b3f]">
+                        {formatDate(memory.date)}
                       </p>
 
-                      <h2 className="mt-4 font-serif text-4xl leading-tight sm:text-5xl">
-                        {memory.title}
-                      </h2>
+                      {/* TITLE + LOCATION */}
+
+                      <div className="mt-5 px-2 text-center">
+
+                        <h2 className="font-serif text-3xl leading-[1.15] sm:text-5xl">
+                          {memory.title}
+                        </h2>
+
+                        {memory.location && (
+                          <p className="mt-3 text-[9px] uppercase tracking-[0.22em] text-[#81766d]">
+                            ◉ {memory.location}
+                          </p>
+                        )}
+
+                      </div>
+
+                      {/* DESCRIPTION */}
 
                       {memory.description && (
-                        <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[#81766d]">
+                        <p className="mx-auto mt-6 max-w-2xl px-2 font-serif text-sm leading-7 text-[#81766d] sm:text-base">
                           {memory.description}
                         </p>
                       )}
 
-                      {/* Metadata */}
-                      <div className="mt-7 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 text-[9px] uppercase tracking-[0.18em] text-[#81766d]">
-
-                        <span>
-                          ♡{" "}
-                          {new Date(
-                            `${memory.date}T00:00:00`
-                          ).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </span>
-
-                        {memory.location && (
-                          <span>
-                            ◉ {memory.location}
-                          </span>
-                        )}
-
-                        <span>
-                          ♡ A perfect memory
-                        </span>
-
-                      </div>
                     </div>
 
-                    {/* -------------------------------------------------- */}
-                    {/* Main media                                          */}
-                    {/* -------------------------------------------------- */}
+                    {/* ===================================================== */}
+                    {/* MEDIA                                                  */}
+                    {/* ===================================================== */}
 
-                    <div className="px-3 pb-3 pt-6 sm:px-6 sm:pt-7">
+                    <div className="mx-auto mt-8 w-full max-w-5xl sm:mt-10">
 
-                      {memory.media.length > 0 ? (
+                      {memory.signedMedia.length > 0 ? (
                         <>
 
-                          {/* Main image */}
-                          <div className="relative aspect-[16/9] overflow-hidden rounded-lg bg-[#ddd4ca]">
-                            <Image
-                              src={memory.media[0]}
-                              alt={memory.title}
-                              fill
-                              sizes="(max-width: 768px) 100vw, 1100px"
-                              className="object-cover transition duration-700 hover:scale-[1.02]"
-                            />
+                          {/* MAIN MEDIA */}
+
+                          <div className="overflow-hidden rounded-lg bg-[#ddd4ca]">
+
+                            {memory.signedMedia[0].type ===
+                            "video" ? (
+                              <video
+                                src={
+                                  memory.signedMedia[0]
+                                    .signedUrl
+                                }
+                                controls
+                                playsInline
+                                preload="metadata"
+                                className="mx-auto block max-h-[700px] w-full object-contain"
+                              />
+                            ) : (
+                              <img
+                                src={
+                                  memory.signedMedia[0]
+                                    .signedUrl
+                                }
+                                alt={memory.title}
+                                className="mx-auto block max-h-[700px] w-full object-contain transition duration-700 hover:scale-[1.01]"
+                              />
+                            )}
+
                           </div>
 
-                          {/* Thumbnail row */}
-                          {memory.media.length > 1 && (
+                          {/* ================================================= */}
+                          {/* THUMBNAILS                                        */}
+                          {/* ================================================= */}
+
+                          {memory.signedMedia.length > 1 && (
                             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
 
-                              {memory.media
-                                .slice(1, 5)
-                                .map((url, index) => (
-                                  <div
-                                    key={`${memory.id}-thumb-${index}`}
-                                    className="relative aspect-[4/3] overflow-hidden rounded-md bg-[#ddd4ca]"
-                                  >
-                                    <Image
-                                      src={url}
-                                      alt={`${memory.title} ${index + 2}`}
-                                      fill
-                                      sizes="(max-width: 768px) 25vw, 250px"
-                                      className="object-cover transition duration-500 hover:scale-105"
-                                    />
+                              {memory.signedMedia
+                                .slice(1)
+                                .map(
+                                  (media, index) => (
+                                    <div
+                                      key={`${memory.id}-media-${index + 1}`}
+                                      className="group relative aspect-[4/3] overflow-hidden rounded-md bg-[#ddd4ca]"
+                                    >
 
-                                    {/* Small heart overlay */}
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                      <span className="text-2xl text-white drop-shadow-md">
-                                        ♡
-                                      </span>
+                                      {media.type ===
+                                      "video" ? (
+                                        <video
+                                          src={
+                                            media.signedUrl
+                                          }
+                                          muted
+                                          playsInline
+                                          preload="metadata"
+                                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                                        />
+                                      ) : (
+                                        <img
+                                          src={
+                                            media.signedUrl
+                                          }
+                                          alt={`${memory.title} ${
+                                            index +
+                                            2
+                                          }`}
+                                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                                        />
+                                      )}
+
+                                      {/* VIDEO */}
+
+                                      {media.type ===
+                                        "video" && (
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-sm text-white backdrop-blur-sm">
+                                            ▶
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {/* HEART */}
+
+                                      {media.type ===
+                                        "image" && (
+                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 transition duration-300 group-hover:opacity-100">
+                                          <span className="text-2xl text-white drop-shadow-lg">
+                                            ♡
+                                          </span>
+                                        </div>
+                                      )}
+
                                     </div>
-                                  </div>
-                                ))}
+                                  )
+                                )}
 
                             </div>
                           )}
 
                         </>
                       ) : (
+                        /* NO MEDIA */
+
                         <div className="flex aspect-[16/9] items-center justify-center rounded-lg bg-[#ddd4ca]">
-                          <span className="font-serif text-5xl text-[#5d3928]/20">
+
+                          <span className="font-serif text-6xl text-[#5d3928]/20">
                             ♡
                           </span>
+
                         </div>
                       )}
 
                     </div>
 
-                    {/* -------------------------------------------------- */}
-                    {/* Description                                         */}
-                    {/* -------------------------------------------------- */}
-
-                    {memory.description && (
-                      <div className="px-7 pb-8 pt-6 text-center sm:px-14 sm:pb-10">
-
-                        <p className="mx-auto max-w-2xl font-serif text-sm leading-7 text-[#81766d] sm:text-base">
-                          {memory.description}
-                        </p>
-
-                      </div>
-                    )}
-
                   </article>
                 ))}
 
               </div>
-
-              {/* ======================================================== */}
-              {/* MORE FROM THIS DAY                                      */}
-              {/* ======================================================== */}
-
-              {previousYears.length > 0 && (
-                <section className="mt-20 border-t border-black/[0.07] pt-12 sm:mt-24 sm:pt-14">
-
-                  <div className="text-center">
-
-                    <p className="text-[9px] uppercase tracking-[0.3em] text-[#81766d]">
-                      Same day, different years
-                    </p>
-
-                    <h2 className="mt-3 font-serif text-2xl sm:text-3xl">
-                      More from this day
-                    </h2>
-
-                  </div>
-
-                  <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-
-                    {previousYears.map(([year, memory]) => (
-                      <a
-                        key={year}
-                        href={`/memories/${memory.id}`}
-                        className="group relative overflow-hidden rounded-md bg-[#ddd4ca]"
-                      >
-
-                        {/* Image */}
-                        <div className="relative aspect-[16/9]">
-
-                          {memory.media.length > 0 ? (
-                            <Image
-                              src={memory.media[0]}
-                              alt={`${year} memory`}
-                              fill
-                              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                              className="object-cover transition duration-700 group-hover:scale-105"
-                            />
-                          ) : (
-                            <Image
-                              src={clock}
-                              alt={`${year} memory`}
-                              fill
-                              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                              className="object-cover transition duration-700 group-hover:scale-105"
-                            />
-                          )}
-
-                          {/* Overlay */}
-                          <div className="absolute inset-0 bg-black/25 transition group-hover:bg-black/35" />
-
-                          {/* Year */}
-                          <div className="absolute inset-0 flex items-center justify-center">
-
-                            <span className="font-serif text-3xl text-white drop-shadow-lg sm:text-4xl">
-                              {year}
-                            </span>
-
-                          </div>
-
-                        </div>
-
-                        {/* Bottom information */}
-                        <div className="bg-[#ebe4da] px-4 py-4">
-
-                          <p className="font-serif text-lg">
-                            {memory.title}
-                          </p>
-
-                          <p className="mt-1 text-[9px] uppercase tracking-[0.2em] text-[#81766d]">
-                            {today.formatted} · {year}
-                          </p>
-
-                        </div>
-
-                      </a>
-                    ))}
-
-                  </div>
-                </section>
-              )}
-
-            </>
-          )}
+            )}
 
         </div>
+
       </section>
 
-      {/* ================================================================ */}
-      {/* FOOTER                                                           */}
-      {/* ================================================================ */}
+      {/* ================================================================== */}
+      {/* FOOTER                                                             */}
+      {/* ================================================================== */}
 
       <footer className="border-t border-black/[0.06] px-5 py-12 text-center sm:px-10">
 
