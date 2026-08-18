@@ -106,7 +106,7 @@ const rooms = [
   {
     icon: "✉",
     name: "For Her",
-    href: "/forher",
+    href: "/for-her",
     image: forHerImage,
     wide: true,
   },
@@ -114,6 +114,7 @@ const rooms = [
 
 export default function HomePage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [todayDate, setTodayDate] = useState<Date | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -129,6 +130,7 @@ export default function HomePage() {
       }
 
       if (mounted) {
+        setTodayDate(new Date());
         setAuthenticated(true);
       }
     };
@@ -140,11 +142,13 @@ export default function HomePage() {
     };
   }, []);
 
-  if (authenticated === null) {
+  if (authenticated === null || todayDate === null) {
     return (
       <main className="flex min-h-[100svh] items-center justify-center bg-[#28211d]">
         <div className="text-center text-white/70">
-          <div className="mb-4 font-serif text-3xl">♡</div>
+          <div className="mb-4 font-serif text-3xl">
+            ♡
+          </div>
 
           <p className="text-[9px] uppercase tracking-[0.3em]">
             Opening our home...
@@ -154,13 +158,23 @@ export default function HomePage() {
     );
   }
 
+  const formattedToday = todayDate.toLocaleDateString(
+    "en-US",
+    {
+      month: "long",
+      day: "numeric",
+    }
+  );
+
   return (
     <main className="site-root page-fade bg-[#f4f0ea] text-[#28231f]">
+
       {/* ================================================================ */}
       {/* HERO                                                            */}
       {/* ================================================================ */}
 
       <section className="hero">
+
         <Image
           src={homePc}
           alt="Our home"
@@ -182,6 +196,7 @@ export default function HomePage() {
         <div className="hero-overlay" />
 
         <div className="hero-content">
+
           <p className="hero-eyebrow">
             Our little corner of the internet
           </p>
@@ -190,30 +205,49 @@ export default function HomePage() {
             Our Home
           </h1>
 
-          <div className="hero-heart">♡</div>
+          <div className="hero-heart">
+            ♡
+          </div>
+
         </div>
 
-        <a href="#today" className="hero-enter">
-          <span>Enter</span>
+        <a
+          href="#today"
+          className="hero-enter"
+        >
+          <span>
+            Enter
+          </span>
 
           <span className="hero-enter-line" />
 
-          <span className="hero-enter-arrow">⌄</span>
+          <span className="hero-enter-arrow">
+            ⌄
+          </span>
         </a>
+
       </section>
 
       {/* ================================================================ */}
       {/* TODAY                                                            */}
       {/* ================================================================ */}
 
-      <section id="today" className="today-section">
+      <section
+        id="today"
+        className="today-section"
+      >
         <div className="page-container">
+
           <div className="today-grid">
+
             <div>
-              <p className="today-label">Today</p>
+
+              <p className="today-label">
+                Today
+              </p>
 
               <h2 className="today-date">
-                August 17
+                {formattedToday}
               </h2>
 
               <p className="today-description">
@@ -222,17 +256,28 @@ export default function HomePage() {
                 Some days become memories.
               </p>
 
-              <a href="/today" className="today-link">
-                <span>On this day</span>
-                <span>→</span>
+              <a
+                href="/today"
+                className="today-link"
+              >
+                <span>
+                  On this day
+                </span>
+
+                <span>
+                  →
+                </span>
               </a>
+
             </div>
 
             <a
               href="/today"
               className="memory-card group"
             >
+
               <div className="memory-content">
+
                 <p className="memory-eyebrow">
                   On this day
                 </p>
@@ -244,11 +289,13 @@ export default function HomePage() {
                 </h3>
 
                 <p className="memory-dates">
-                  August 17, 2025 · August 17, 2024 · August 17, 2023
+                  {formattedToday} · Previous years · Same day
                 </p>
+
               </div>
 
               <div className="memory-image">
+
                 <Image
                   src={clock}
                   alt="Our memories"
@@ -256,35 +303,50 @@ export default function HomePage() {
                   sizes="(max-width: 768px) 100vw, 42vw"
                   className="object-cover transition-transform duration-700 group-hover:scale-105"
                 />
+
               </div>
+
             </a>
+
           </div>
+
         </div>
+
       </section>
 
       {/* ================================================================ */}
       {/* ROOMS                                                            */}
       {/* ================================================================ */}
 
-      <section id="rooms" className="rooms-section">
+      <section
+        id="rooms"
+        className="rooms-section"
+      >
         <div className="page-container">
+
           <div className="rooms-header">
+
             <p className="section-eyebrow">
               Explore our rooms
             </p>
 
             <div className="rooms-header-line" />
+
           </div>
 
           <div className="rooms-grid">
+
             {rooms.map((room) => (
               <a
                 key={room.href}
                 href={room.href}
                 className={`room-card group ${
-                  room.wide ? "room-card-wide" : ""
+                  room.wide
+                    ? "room-card-wide"
+                    : ""
                 }`}
               >
+
                 <Image
                   src={room.image}
                   alt={room.name}
@@ -298,6 +360,7 @@ export default function HomePage() {
                 />
 
                 <div className="room-card-content">
+
                   <span className="room-card-icon">
                     {room.icon}
                   </span>
@@ -305,11 +368,16 @@ export default function HomePage() {
                   <span className="room-card-title">
                     {room.name}
                   </span>
+
                 </div>
+
               </a>
             ))}
+
           </div>
+
         </div>
+
       </section>
 
       {/* ================================================================ */}
@@ -317,7 +385,9 @@ export default function HomePage() {
       {/* ================================================================ */}
 
       <section className="quote-section">
+
         <div className="page-container">
+
           <div className="section-divider mb-14" />
 
           <div className="quote-mark">
@@ -333,8 +403,11 @@ export default function HomePage() {
           <p className="quote-caption">
             Just ours ♡
           </p>
+
         </div>
+
       </section>
+
     </main>
   );
 }
