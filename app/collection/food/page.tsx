@@ -1,14 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-
 import foodImage from "@/assets/food.jpg";
 
 type FoodMedia = {
   media_id: string;
   media_url: string;
+  category: string | null;
 };
 
 type GalleryMedia = FoodMedia & {
@@ -21,21 +21,41 @@ export default function FoodPage() {
   const [loading, setLoading] = useState(true);
 
   // ================================================================
+  // CATEGORY
+  // ================================================================
+
+  const [selectedCategory, setSelectedCategory] =
+    useState("All");
+
+  // ================================================================
   // ADD FOOD FORM
   // ================================================================
 
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [showAddForm, setShowAddForm] =
+    useState(false);
 
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] =
+    useState(false);
+
+  const [selectedFiles, setSelectedFiles] =
+    useState<File[]>([]);
+
+  const [uploadError, setUploadError] =
+    useState<string | null>(null);
+
+  const [uploadProgress, setUploadProgress] =
+    useState(0);
+
+  const [category, setCategory] =
+    useState("");
 
   // ================================================================
   // STORAGE PATH
   // ================================================================
 
-  const getStoragePath = (value: string): string => {
+  const getStoragePath = (
+    value: string
+  ): string => {
     if (!value.startsWith("http")) {
       return value;
     }
@@ -43,8 +63,11 @@ export default function FoodPage() {
     try {
       const url = new URL(value);
 
-      const marker = "/storage/v1/object/";
-      const markerIndex = url.pathname.indexOf(marker);
+      const marker =
+        "/storage/v1/object/";
+
+      const markerIndex =
+        url.pathname.indexOf(marker);
 
       if (markerIndex === -1) {
         return value;
@@ -54,12 +77,25 @@ export default function FoodPage() {
         markerIndex + marker.length
       );
 
-      path = path.replace(/^public\//, "");
-      path = path.replace(/^sign\//, "");
-      path = path.replace(/^authenticated\//, "");
+      path = path.replace(
+        /^public\//,
+        ""
+      );
+
+      path = path.replace(
+        /^sign\//,
+        ""
+      );
+
+      path = path.replace(
+        /^authenticated\//,
+        ""
+      );
 
       if (path.startsWith("media/")) {
-        path = path.substring("media/".length);
+        path = path.substring(
+          "media/".length
+        );
       }
 
       return path;
@@ -90,7 +126,9 @@ export default function FoodPage() {
       "ogv",
     ];
 
-    return videoExtensions.includes(extension)
+    return videoExtensions.includes(
+      extension
+    )
       ? "video"
       : "image";
   };
@@ -102,7 +140,8 @@ export default function FoodPage() {
   const createSignedUrl = async (
     storagePath: string
   ): Promise<string | null> => {
-    const cleanPath = storagePath.trim();
+    const cleanPath =
+      storagePath.trim();
 
     if (!cleanPath) {
       return null;
@@ -131,7 +170,9 @@ export default function FoodPage() {
       return null;
     }
 
-    return data?.signedUrl ?? null;
+    return (
+      data?.signedUrl ?? null
+    );
   };
 
   // ================================================================
@@ -150,11 +191,17 @@ export default function FoodPage() {
         // ------------------------------------------------------------
 
         const {
-          data: { session },
-        } = await supabase.auth.getSession();
+          data: {
+            session,
+          },
+        } =
+          await supabase.auth.getSession();
 
         if (!session) {
-          window.location.replace("/login");
+          window.location.replace(
+            "/login"
+          );
+
           return;
         }
 
@@ -167,7 +214,9 @@ export default function FoodPage() {
           error,
         } = await supabase
           .from("food")
-          .select("media_id, media_url")
+          .select(
+            "media_id, media_url, category"
+          )
           .order("media_id", {
             ascending: false,
           });
@@ -184,11 +233,14 @@ export default function FoodPage() {
         // SIGNED URLS
         // ------------------------------------------------------------
 
-        const gallery: GalleryMedia[] = [];
+        const gallery: GalleryMedia[] =
+          [];
 
         for (const item of data ?? []) {
           const storagePath =
-            getStoragePath(item.media_url);
+            getStoragePath(
+              item.media_url
+            );
 
           const signedUrl =
             await createSignedUrl(
@@ -205,9 +257,17 @@ export default function FoodPage() {
           }
 
           gallery.push({
-            media_id: item.media_id,
-            media_url: item.media_url,
+            media_id:
+              item.media_id,
+
+            media_url:
+              item.media_url,
+
+            category:
+              item.category,
+
             signedUrl,
+
             type: getMediaType(
               storagePath
             ),
@@ -237,6 +297,53 @@ export default function FoodPage() {
   }, []);
 
   // ================================================================
+  // DYNAMIC CATEGORIES
+  // ================================================================
+
+  const categories = useMemo(() => {
+    const uniqueCategories =
+      new Set<string>();
+
+    media.forEach((item) => {
+      if (
+        item.category &&
+        item.category.trim()
+      ) {
+        uniqueCategories.add(
+          item.category.trim()
+        );
+      }
+    });
+
+    return Array.from(
+      uniqueCategories
+    ).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [media]);
+
+  // ================================================================
+  // FILTER MEDIA
+  // ================================================================
+
+  const filteredMedia = useMemo(() => {
+    if (
+      selectedCategory === "All"
+    ) {
+      return media;
+    }
+
+    return media.filter(
+      (item) =>
+        item.category?.trim() ===
+        selectedCategory
+    );
+  }, [
+    media,
+    selectedCategory,
+  ]);
+
+  // ================================================================
   // CLOSE MODAL
   // ================================================================
 
@@ -249,6 +356,7 @@ export default function FoodPage() {
     setSelectedFiles([]);
     setUploadError(null);
     setUploadProgress(0);
+    setCategory("");
   };
 
   // ================================================================
@@ -273,17 +381,20 @@ export default function FoodPage() {
     // VALIDATE TYPE
     // ------------------------------------------------------------
 
-    const invalidFile = files.find(
-      (file) => {
+    const invalidFile =
+      files.find((file) => {
         const isImage =
-          file.type.startsWith("image/");
+          file.type.startsWith(
+            "image/"
+          );
 
         const isVideo =
-          file.type.startsWith("video/");
+          file.type.startsWith(
+            "video/"
+          );
 
         return !isImage && !isVideo;
-      }
-    );
+      });
 
     if (invalidFile) {
       setSelectedFiles([]);
@@ -299,11 +410,12 @@ export default function FoodPage() {
     // MAX FILE SIZE
     // ------------------------------------------------------------
 
-    const oversizedFile = files.find(
-      (file) =>
-        file.size >
-        100 * 1024 * 1024
-    );
+    const oversizedFile =
+      files.find(
+        (file) =>
+          file.size >
+          100 * 1024 * 1024
+      );
 
     if (oversizedFile) {
       setSelectedFiles([]);
@@ -329,11 +441,12 @@ export default function FoodPage() {
       return;
     }
 
-    setSelectedFiles((current) =>
-      current.filter(
-        (_, fileIndex) =>
-          fileIndex !== index
-      )
+    setSelectedFiles(
+      (current) =>
+        current.filter(
+          (_, fileIndex) =>
+            fileIndex !== index
+        )
     );
 
     setUploadError(null);
@@ -344,18 +457,22 @@ export default function FoodPage() {
   // ================================================================
 
   const uploadSingleMedia = async (
-    file: File
+    file: File,
+    foodCategory: string
   ): Promise<GalleryMedia> => {
     const isVideo =
-      file.type.startsWith("video/");
+      file.type.startsWith(
+        "video/"
+      );
 
     const extension =
       file.name
         .split(".")
         .pop()
-        ?.toLowerCase() || (
-          isVideo ? "mp4" : "jpg"
-        );
+        ?.toLowerCase() ||
+      (isVideo
+        ? "mp4"
+        : "jpg");
 
     const fileName =
       `${crypto.randomUUID()}.${extension}`;
@@ -379,17 +496,19 @@ export default function FoodPage() {
     const {
       data: uploadData,
       error: storageError,
-    } = await supabase.storage
-      .from("media")
-      .upload(
-        filePath,
-        file,
-        {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: file.type,
-        }
-      );
+    } =
+      await supabase.storage
+        .from("media")
+        .upload(
+          filePath,
+          file,
+          {
+            cacheControl: "3600",
+            upsert: false,
+            contentType:
+              file.type,
+          }
+        );
 
     if (storageError) {
       console.error(
@@ -414,15 +533,21 @@ export default function FoodPage() {
     const {
       data: insertedMedia,
       error: databaseError,
-    } = await supabase
-      .from("food")
-      .insert({
-        media_url: filePath,
-      })
-      .select(
-        "media_id, media_url"
-      )
-      .single();
+    } =
+      await supabase
+        .from("food")
+        .insert({
+          media_url:
+            filePath,
+
+          category:
+            foodCategory ||
+            null,
+        })
+        .select(
+          "media_id, media_url, category"
+        )
+        .single();
 
     if (databaseError) {
       console.error(
@@ -433,7 +558,9 @@ export default function FoodPage() {
       // Rollback storage upload
       await supabase.storage
         .from("media")
-        .remove([filePath]);
+        .remove([
+          filePath,
+        ]);
 
       throw new Error(
         `${file.name}: ${databaseError.message}`
@@ -458,9 +585,15 @@ export default function FoodPage() {
     return {
       media_id:
         insertedMedia.media_id,
+
       media_url:
         insertedMedia.media_url,
+
+      category:
+        insertedMedia.category,
+
       signedUrl,
+
       type: isVideo
         ? "video"
         : "image",
@@ -472,7 +605,9 @@ export default function FoodPage() {
   // ================================================================
 
   const handleUpload = async () => {
-    if (selectedFiles.length === 0) {
+    if (
+      selectedFiles.length === 0
+    ) {
       setUploadError(
         "Please choose at least one image or video."
       );
@@ -490,15 +625,39 @@ export default function FoodPage() {
       // ------------------------------------------------------------
 
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
+        data: {
+          session,
+        },
+      } =
+        await supabase.auth.getSession();
 
       if (!session) {
-        window.location.replace("/login");
+        window.location.replace(
+          "/login"
+        );
+
         return;
       }
 
-      const failedFiles: string[] = [];
+      // ------------------------------------------------------------
+      // CATEGORY
+      // ------------------------------------------------------------
+
+      const cleanCategory =
+        category.trim();
+
+      if (!cleanCategory) {
+        setUploadError(
+          "Please enter a category."
+        );
+
+        setUploading(false);
+
+        return;
+      }
+
+      const failedFiles: string[] =
+        [];
 
       // ------------------------------------------------------------
       // UPLOAD ONE BY ONE
@@ -506,7 +665,8 @@ export default function FoodPage() {
 
       for (
         let index = 0;
-        index < selectedFiles.length;
+        index <
+        selectedFiles.length;
         index++
       ) {
         const file =
@@ -515,14 +675,17 @@ export default function FoodPage() {
         try {
           const uploaded =
             await uploadSingleMedia(
-              file
+              file,
+              cleanCategory
             );
 
           // Add immediately to gallery
-          setMedia((current) => [
-            uploaded,
-            ...current,
-          ]);
+          setMedia(
+            (current) => [
+              uploaded,
+              ...current,
+            ]
+          );
         } catch (error) {
           console.error(
             `Failed to upload ${file.name}:`,
@@ -547,7 +710,9 @@ export default function FoodPage() {
       // FAILED FILES
       // ------------------------------------------------------------
 
-      if (failedFiles.length > 0) {
+      if (
+        failedFiles.length > 0
+      ) {
         setUploadError(
           `${failedFiles.length} file${
             failedFiles.length === 1
@@ -580,6 +745,17 @@ export default function FoodPage() {
       setShowAddForm(false);
       setUploadError(null);
       setUploadProgress(0);
+      setCategory("");
+
+      // If currently viewing All,
+      // everything is visible.
+      //
+      // If viewing another category,
+      // automatically switch to the
+      // newly added category.
+      setSelectedCategory(
+        cleanCategory
+      );
     } catch (error) {
       console.error(
         "Food upload failed:",
@@ -623,9 +799,9 @@ export default function FoodPage() {
   return (
     <main className="min-h-[100svh] bg-[#f4f0ea] text-[#28231f]">
 
-      {/* ============================================================ */}
-      {/* HERO                                                         */}
-      {/* ============================================================ */}
+      {/* ============================================================
+          HERO
+      ============================================================ */}
 
       <section className="relative h-[65svh] min-h-[450px] w-full overflow-hidden sm:h-[70svh] sm:min-h-[520px]">
 
@@ -683,11 +859,11 @@ export default function FoodPage() {
 
       </section>
 
-      {/* ============================================================ */}
-      {/* INTRO                                                        */}
-      {/* ============================================================ */}
+      {/* ============================================================
+          INTRO
+      ============================================================ */}
 
-      <section className="w-full px-5 pb-14 pt-20 sm:px-10 sm:pb-20 sm:pt-28">
+      <section className="w-full px-5 pb-12 pt-20 sm:px-10 sm:pb-16 sm:pt-28">
 
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center text-center">
 
@@ -710,109 +886,228 @@ export default function FoodPage() {
 
       </section>
 
-      {/* ============================================================ */}
-      {/* EMPTY                                                        */}
-      {/* ============================================================ */}
+      {/* ============================================================
+          CATEGORY FILTERS
+      ============================================================ */}
 
-      {media.length === 0 && (
-        <section className="flex min-h-[40vh] flex-col items-center justify-center px-5 py-24 text-center">
+      <section className="px-5 pb-8 sm:px-8 lg:px-12">
 
-          <div className="font-serif text-6xl text-[#5d3928]/25">
-            ♡
-          </div>
+        <div className="mx-auto w-full max-w-7xl">
 
-          <h2 className="mt-7 font-serif text-3xl sm:text-4xl">
-            Our kitchen is waiting.
-          </h2>
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
 
-          <p className="mt-4 max-w-md text-sm leading-7 text-[#81766d]">
-            There are no food ideas here yet.
-            <br />
-            Maybe the first delicious thing belongs here.
-          </p>
+            {/* ALL */}
 
-        </section>
-      )}
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedCategory(
+                  "All"
+                )
+              }
+              className={`shrink-0 rounded-full px-5 py-2.5 text-[9px] font-medium tracking-[0.2em] transition ${
+                selectedCategory ===
+                "All"
+                  ? "bg-[#5d3928] !text-white shadow-sm"
+                  : "bg-[#ebe4da] text-[#81766d] hover:bg-[#e2d9ce] hover:text-[#5d3928]"
+              }`}
+            >
+              All
+            </button>
 
-      {/* ============================================================ */}
-      {/* GALLERY                                                      */}
-      {/* ============================================================ */}
+            {/* DYNAMIC CATEGORIES */}
 
-      {media.length > 0 && (
-        <section className="px-5 pb-24 sm:px-8 sm:pb-36 lg:px-12">
-
-          <div className="mx-auto w-full max-w-7xl">
-
-            <div className="columns-2 gap-4 sm:columns-3 lg:columns-3 xl:columns-4">
-
-              {media.map((item, index) => (
-                <div
-                  key={item.media_id}
-                  className="mb-4 break-inside-avoid"
+            {categories.map(
+              (item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() =>
+                    setSelectedCategory(
+                      item
+                    )
+                  }
+                  className={`shrink-0 rounded-full px-5 py-2.5 text-[9px] font-medium tracking-[0.2em] transition ${
+                    selectedCategory ===
+                    item
+                      ? "bg-[#5d3928] !text-white shadow-sm"
+                      : "bg-[#ebe4da] text-[#81766d] hover:bg-[#e2d9ce] hover:text-[#5d3928]"
+                  }`}
                 >
-
-                  <div className="group relative overflow-hidden rounded-[4px] bg-[#e5ddd3] shadow-[0_4px_20px_rgba(60,40,30,0.05)] transition-all duration-700 hover:-translate-y-1 hover:shadow-[0_12px_35px_rgba(60,40,30,0.10)]">
-
-                    {/* ================================================= */}
-                    {/* IMAGE                                             */}
-                    {/* ================================================= */}
-
-                    {item.type === "image" && (
-                      <img
-                        src={item.signedUrl}
-                        alt="Food"
-                        loading={
-                          index < 6
-                            ? "eager"
-                            : "lazy"
-                        }
-                        className="block h-auto w-full object-contain transition-transform duration-700 ease-out group-hover:scale-[1.025]"
-                      />
-                    )}
-
-                    {/* ================================================= */}
-                    {/* VIDEO                                             */}
-                    {/* ================================================= */}
-
-                    {item.type === "video" && (
-                      <video
-                        src={item.signedUrl}
-                        controls
-                        playsInline
-                        preload={
-                          index < 4
-                            ? "metadata"
-                            : "none"
-                        }
-                        className="block h-auto w-full bg-black"
-                      />
-                    )}
-
-                    {/* ================================================= */}
-                    {/* VIDEO LABEL                                       */}
-                    {/* ================================================= */}
-
-                    {item.type === "video" && (
-                      <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/50 px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] text-white backdrop-blur-sm">
-                        Video
-                      </div>
-                    )}
-
-                  </div>
-
-                </div>
-              ))}
-
-            </div>
+                  {item}
+                </button>
+              )
+            )}
 
           </div>
 
-        </section>
-      )}
+        </div>
 
-      {/* ============================================================ */}
-      {/* ADD BUTTON                                                   */}
-      {/* ============================================================ */}
+      </section>
+
+      {/* ============================================================
+          MEDIA SCROLL CONTAINER
+      ============================================================ */}
+
+      <section className="px-5 pb-20 sm:px-8 sm:pb-28 lg:px-12">
+
+        <div className="mx-auto w-full max-w-7xl">
+
+          <div className="relative h-[65svh] min-h-[450px] max-h-[850px] overflow-y-auto rounded-2xl border border-black/[0.06] bg-[#ebe4da]/50 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] sm:h-[70svh] sm:p-6">
+
+            {/* ======================================================
+                EMPTY STATE
+            ====================================================== */}
+
+            {filteredMedia.length === 0 && (
+              <div className="flex h-full min-h-[350px] flex-col items-center justify-center px-5 text-center">
+
+                <div className="font-serif text-6xl text-[#5d3928]/25">
+                  ♡
+                </div>
+
+                <h2 className="mt-7 font-serif text-3xl sm:text-4xl">
+                  {selectedCategory ===
+                  "All"
+                    ? "Our kitchen is waiting."
+                    : `No ${selectedCategory.toLowerCase()} food yet.`}
+                </h2>
+
+                <p className="mt-4 max-w-md text-sm leading-7 text-[#81766d]">
+                  {selectedCategory ===
+                  "All" ? (
+                    <>
+                      There are no food ideas
+                      here yet.
+                      <br />
+                      Maybe the first delicious
+                      thing belongs here.
+                    </>
+                  ) : (
+                    <>
+                      Nothing has been added
+                      to this category yet.
+                      <br />
+                      Maybe something delicious
+                      belongs here.
+                    </>
+                  )}
+                </p>
+
+              </div>
+            )}
+
+            {/* ======================================================
+                GALLERY
+            ====================================================== */}
+
+            {filteredMedia.length >
+              0 && (
+              <div className="columns-2 gap-4 sm:columns-3 lg:columns-3 xl:columns-4">
+
+                {filteredMedia.map(
+                  (
+                    item,
+                    index
+                  ) => (
+                    <div
+                      key={
+                        item.media_id
+                      }
+                      className="mb-4 break-inside-avoid"
+                    >
+
+                      <div className="group relative overflow-hidden rounded-[4px] bg-[#e5ddd3] shadow-[0_4px_20px_rgba(60,40,30,0.05)] transition-all duration-700 hover:-translate-y-1 hover:shadow-[0_12px_35px_rgba(60,40,30,0.10)]">
+
+                        {/* IMAGE */}
+
+                        {item.type ===
+                          "image" && (
+                          <img
+                            src={
+                              item.signedUrl
+                            }
+                            alt={
+                              item.category
+                                ? item.category
+                                : "Food"
+                            }
+                            loading={
+                              index <
+                              6
+                                ? "eager"
+                                : "lazy"
+                            }
+                            className="block h-auto w-full object-contain transition-transform duration-700 ease-out group-hover:scale-[1.025]"
+                          />
+                        )}
+
+                        {/* VIDEO */}
+
+                        {item.type ===
+                          "video" && (
+                          <video
+                            src={
+                              item.signedUrl
+                            }
+                            controls
+                            playsInline
+                            preload={
+                              index <
+                              4
+                                ? "metadata"
+                                : "none"
+                            }
+                            className="block h-auto w-full bg-black"
+                          />
+                        )}
+
+                        {/* CATEGORY LABEL */}
+
+                        {item.category && (
+                          <div className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-black/50 px-3 py-1.5 text-[8px] tracking-[0.2em] text-white backdrop-blur-sm">
+                            {
+                              item.category
+                            }
+                          </div>
+                        )}
+
+                        {/* VIDEO LABEL */}
+
+                        {item.type ===
+                          "video" && (
+                          <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/50 px-3 py-1.5 text-[8px] tracking-[0.2em] text-white backdrop-blur-sm">
+                            Video
+                          </div>
+                        )}
+
+                      </div>
+
+                    </div>
+                  )
+                )}
+
+              </div>
+            )}
+
+          </div>
+
+          {/* SCROLL HINT */}
+
+          {filteredMedia.length >
+            0 && (
+            <p className="mt-3 text-center text-[8px] uppercase tracking-[0.25em] text-[#81766d]/60">
+              Scroll inside the collection
+            </p>
+          )}
+
+        </div>
+
+      </section>
+
+      {/* ============================================================
+          ADD BUTTON
+      ============================================================ */}
 
       <section className="px-5 pb-20 pt-4 sm:px-10 sm:pb-28">
 
@@ -821,14 +1116,26 @@ export default function FoodPage() {
           <button
             type="button"
             onClick={() => {
-              setUploadError(null);
-              setSelectedFiles([]);
-              setUploadProgress(0);
-              setShowAddForm(true);
+              setUploadError(
+                null
+              );
+
+              setSelectedFiles(
+                []
+              );
+
+              setUploadProgress(
+                0
+              );
+
+              setCategory("");
+
+              setShowAddForm(
+                true
+              );
             }}
             className="inline-flex items-center gap-4 rounded-full bg-[#5d3928] px-7 py-4 text-[10px] font-medium uppercase tracking-[0.25em] !text-white shadow-sm transition hover:bg-[#8b4b3f] hover:shadow-md"
           >
-
             <span className="!text-white">
               Add food
             </span>
@@ -836,33 +1143,34 @@ export default function FoodPage() {
             <span className="text-base !text-white">
               →
             </span>
-
           </button>
 
         </div>
 
       </section>
 
-      {/* ============================================================ */}
-      {/* ADD FOOD MODAL                                               */}
-      {/* ============================================================ */}
+      {/* ============================================================
+          ADD FOOD MODAL
+      ============================================================ */}
 
       {showAddForm && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/50 px-5 py-8 backdrop-blur-sm"
-          onClick={closeAddForm}
+          onClick={
+            closeAddForm
+          }
         >
 
           <div
             className="w-full max-w-md rounded-2xl bg-[#f4f0ea] p-7 shadow-2xl sm:p-9"
-            onClick={(event) => {
+            onClick={(
+              event
+            ) => {
               event.stopPropagation();
             }}
           >
 
-            {/* ====================================================== */}
-            {/* HEADER                                                 */}
-            {/* ====================================================== */}
+            {/* HEADER */}
 
             <div className="flex items-start justify-between gap-6">
 
@@ -880,8 +1188,12 @@ export default function FoodPage() {
 
               <button
                 type="button"
-                disabled={uploading}
-                onClick={closeAddForm}
+                disabled={
+                  uploading
+                }
+                onClick={
+                  closeAddForm
+                }
                 className="text-2xl text-[#81766d] transition hover:text-[#28231f] disabled:opacity-40"
               >
                 ×
@@ -889,13 +1201,53 @@ export default function FoodPage() {
 
             </div>
 
-            {/* ====================================================== */}
-            {/* FILE PICKER                                             */}
-            {/* ====================================================== */}
+            {/* ======================================================
+                CATEGORY
+            ====================================================== */}
+
+            <div className="mt-7">
+
+              <label
+                htmlFor="food-category"
+                className="block text-[9px] font-medium uppercase tracking-[0.25em] text-[#81766d]"
+              >
+                Category
+              </label>
+
+              <textarea
+                id="food-category"
+                value={category}
+                onChange={(
+                  event
+                ) =>
+                  setCategory(
+                    event.target.value
+                  )
+                }
+                disabled={
+                  uploading
+                }
+                rows={2}
+                placeholder="e.g. Sweet, Dessert, Spicy..."
+                className="mt-3 w-full resize-none rounded-xl border border-[#28231f]/10 bg-[#ebe4da] px-4 py-3 text-sm text-[#28231f] outline-none transition placeholder:text-[#81766d]/50 focus:border-[#8b4b3f]/50 focus:ring-1 focus:ring-[#8b4b3f]/20 disabled:opacity-50"
+              />
+
+              <p className="mt-2 text-[9px] leading-5 text-[#81766d]">
+                You can enter a new category.
+                It will automatically appear
+                in the category filters.
+              </p>
+
+            </div>
+
+            {/* ======================================================
+                FILE PICKER
+            ====================================================== */}
 
             <label
-              className={`mt-8 flex min-h-[220px] cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#28231f]/20 bg-[#ebe4da] px-6 text-center transition hover:border-[#8b4b3f]/50 ${
-                selectedFiles.length > 0
+              className={`mt-6 flex min-h-[220px] cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#28231f]/20 bg-[#ebe4da] px-6 text-center transition hover:border-[#8b4b3f]/50 ${
+                selectedFiles.length >
+                0
                   ? "border-[#8b4b3f]"
                   : ""
               }`}
@@ -906,13 +1258,16 @@ export default function FoodPage() {
                 accept="image/jpeg,image/png,image/webp,image/heic,video/mp4,video/webm,video/quicktime,video/x-m4v"
                 multiple
                 className="hidden"
-                disabled={uploading}
+                disabled={
+                  uploading
+                }
                 onChange={
                   handleFileSelection
                 }
               />
 
-              {selectedFiles.length > 0 ? (
+              {selectedFiles.length >
+              0 ? (
                 <>
 
                   <div className="font-serif text-4xl text-[#8b4b3f]">
@@ -920,8 +1275,11 @@ export default function FoodPage() {
                   </div>
 
                   <p className="mt-4 font-serif text-xl text-[#28231f]">
-                    {selectedFiles.length}{" "}
-                    {selectedFiles.length === 1
+                    {
+                      selectedFiles.length
+                    }{" "}
+                    {selectedFiles.length ===
+                    1
                       ? "file"
                       : "files"}{" "}
                     selected
@@ -931,8 +1289,9 @@ export default function FoodPage() {
                     Click to choose more
                   </p>
 
-                  <p className="mt-4 text-[9px] uppercase tracking-[0.2em] text-[#8b4b3f]">
-                    Images and videos are supported
+                  <p className="mt-4 text-[9px] tracking-[0.2em] text-[#8b4b3f]">
+                    Images and videos
+                    are supported
                   </p>
 
                 </>
@@ -948,11 +1307,13 @@ export default function FoodPage() {
                   </p>
 
                   <p className="mt-2 text-xs text-[#81766d]">
-                    Select multiple images or videos
+                    Select multiple
+                    images or videos
                   </p>
 
                   <p className="mt-3 text-[9px] uppercase tracking-[0.15em] text-[#81766d]/70">
-                    Images & videos · Maximum 100 MB each
+                    Images & videos ·
+                    Maximum 100 MB each
                   </p>
 
                 </>
@@ -960,18 +1321,21 @@ export default function FoodPage() {
 
             </label>
 
-            {/* ====================================================== */}
-            {/* SELECTED FILES                                          */}
-            {/* ====================================================== */}
+            {/* ======================================================
+                SELECTED FILES
+            ====================================================== */}
 
-            {selectedFiles.length > 0 && (
+            {selectedFiles.length >
+              0 && (
               <div className="mt-5 max-h-[200px] overflow-y-auto rounded-xl bg-[#ebe4da] p-3">
 
                 <div className="space-y-2">
 
                   {selectedFiles.map(
-                    (file, index) => {
-
+                    (
+                      file,
+                      index
+                    ) => {
                       const isVideo =
                         file.type.startsWith(
                           "video/"
@@ -994,7 +1358,9 @@ export default function FoodPage() {
                             <div className="min-w-0">
 
                               <p className="truncate text-xs font-medium text-[#28231f]">
-                                {file.name}
+                                {
+                                  file.name
+                                }
                               </p>
 
                               <p className="mt-0.5 text-[9px] text-[#81766d]">
@@ -1002,7 +1368,9 @@ export default function FoodPage() {
                                   file.size /
                                   1024 /
                                   1024
-                                ).toFixed(2)}{" "}
+                                ).toFixed(
+                                  2
+                                )}{" "}
                                 MB
                               </p>
 
@@ -1012,7 +1380,9 @@ export default function FoodPage() {
 
                           <button
                             type="button"
-                            disabled={uploading}
+                            disabled={
+                              uploading
+                            }
                             onClick={() =>
                               removeSelectedFile(
                                 index
@@ -1034,9 +1404,9 @@ export default function FoodPage() {
               </div>
             )}
 
-            {/* ====================================================== */}
-            {/* PROGRESS                                                */}
-            {/* ====================================================== */}
+            {/* ======================================================
+                PROGRESS
+            ====================================================== */}
 
             {uploading && (
               <div className="mt-5">
@@ -1048,7 +1418,9 @@ export default function FoodPage() {
                   </span>
 
                   <span>
-                    {uploadProgress}%
+                    {
+                      uploadProgress
+                    }%
                   </span>
 
                 </div>
@@ -1065,37 +1437,44 @@ export default function FoodPage() {
                 </div>
 
                 <p className="mt-3 text-center text-[9px] uppercase tracking-[0.15em] text-[#81766d]">
-                  Please keep this window open
+                  Please keep this
+                  window open
                 </p>
 
               </div>
             )}
 
-            {/* ====================================================== */}
-            {/* ERROR                                                   */}
-            {/* ====================================================== */}
+            {/* ======================================================
+                ERROR
+            ====================================================== */}
 
             {uploadError && (
               <div className="mt-4 rounded-lg bg-[#9f3f4d]/5 px-4 py-3">
 
                 <p className="text-center text-xs leading-6 text-[#9f3f4d]">
-                  {uploadError}
+                  {
+                    uploadError
+                  }
                 </p>
 
               </div>
             )}
 
-            {/* ====================================================== */}
-            {/* BUTTONS                                                 */}
-            {/* ====================================================== */}
+            {/* ======================================================
+                BUTTONS
+            ====================================================== */}
 
             <div className="mt-7 flex gap-3">
 
               <button
                 type="button"
-                disabled={uploading}
-                onClick={closeAddForm}
-                className="flex-1 rounded-full border border-[#28231f]/15 px-5 py-3.5 text-[10px] font-medium uppercase tracking-[0.2em] text-[#5d3928] transition hover:bg-[#ebe4da] disabled:opacity-40"
+                disabled={
+                  uploading
+                }
+                onClick={
+                  closeAddForm
+                }
+                className="flex-1 rounded-full border border-[#28231f]/15 px-5 py-3.5 text-[10px] font-medium tracking-[0.2em] text-[#5d3928] transition hover:bg-[#ebe4da] disabled:opacity-40"
               >
                 Cancel
               </button>
@@ -1103,17 +1482,23 @@ export default function FoodPage() {
               <button
                 type="button"
                 disabled={
-                  selectedFiles.length === 0 ||
-                  uploading
+                  selectedFiles.length ===
+                    0 ||
+                  uploading ||
+                  !category.trim()
                 }
-                onClick={handleUpload}
-                className="flex-1 rounded-full bg-[#5d3928] px-5 py-3.5 text-[10px] font-medium uppercase tracking-[0.2em] !text-white transition hover:bg-[#8b4b3f] disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={
+                  handleUpload
+                }
+                className="flex-1 rounded-full bg-[#5d3928] px-5 py-3.5 text-[10px] font-medium tracking-[0.2em] !text-white transition hover:bg-[#8b4b3f] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {uploading
                   ? `Uploading ${uploadProgress}%`
-                  : selectedFiles.length > 0
+                  : selectedFiles.length >
+                    0
                   ? `Add ${selectedFiles.length} ${
-                      selectedFiles.length === 1
+                      selectedFiles.length ===
+                      1
                         ? "file"
                         : "files"
                     }`
@@ -1127,9 +1512,9 @@ export default function FoodPage() {
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* FOOTER                                                       */}
-      {/* ============================================================ */}
+      {/* ============================================================
+          FOOTER
+      ============================================================ */}
 
       <footer className="border-t border-black/[0.06] px-5 py-12 text-center">
 
