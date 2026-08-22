@@ -406,7 +406,6 @@ export default function HerWardrobePage() {
         databaseError
       );
 
-      // Rollback storage upload
       await supabase.storage
         .from("media")
         .remove([filePath]);
@@ -675,7 +674,7 @@ export default function HerWardrobePage() {
       {/* INTRO                                                        */}
       {/* ============================================================ */}
 
-      <section className="w-full px-5 pb-14 pt-20 sm:px-10 sm:pb-20 sm:pt-28">
+      <section className="w-full px-5 pb-12 pt-20 sm:px-10 sm:pb-16 sm:pt-28">
 
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center text-center">
 
@@ -699,96 +698,128 @@ export default function HerWardrobePage() {
       </section>
 
       {/* ============================================================ */}
-      {/* EMPTY                                                        */}
+      {/* SCROLLABLE MEDIA COLLECTION                                  */}
       {/* ============================================================ */}
 
-      {media.length === 0 && (
-        <section className="flex min-h-[40vh] flex-col items-center justify-center px-5 py-24 text-center">
+      <section className="px-5 pb-24 sm:px-8 sm:pb-36 lg:px-12">
 
-          <div className="font-serif text-6xl text-[#5d3928]/25">
-            ♡
-          </div>
+        <div className="mx-auto w-full max-w-7xl">
 
-          <h2 className="mt-7 font-serif text-3xl sm:text-4xl">
-            Her wardrobe is waiting.
-          </h2>
+          <div className="relative h-[65svh] min-h-[450px] max-h-[850px] overflow-y-auto rounded-2xl border border-black/[0.06] bg-[#ebe4da]/50 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] sm:h-[70svh] sm:p-6">
 
-          <p className="mt-4 max-w-md text-sm leading-7 text-[#81766d]">
-            There are no pictures or videos here yet.
-            <br />
-            Maybe the first one belongs here.
-          </p>
+            {/* ======================================================
+                EMPTY STATE
+            ====================================================== */}
 
-        </section>
-      )}
+            {media.length === 0 && (
+              <div className="flex h-full min-h-[350px] flex-col items-center justify-center px-5 text-center">
 
-      {/* ============================================================ */}
-      {/* MEDIA                                                         */}
-      {/* ============================================================ */}
+                <div className="font-serif text-6xl text-[#5d3928]/25">
+                  ♡
+                </div>
 
-      {media.length > 0 && (
-        <section className="px-5 pb-24 sm:px-8 sm:pb-36 lg:px-12">
+                <h2 className="mt-7 font-serif text-3xl sm:text-4xl">
+                  Her wardrobe is waiting.
+                </h2>
 
-          <div className="mx-auto w-full max-w-7xl">
+                <p className="mt-4 max-w-md text-sm leading-7 text-[#81766d]">
+                  There are no pictures or
+                  videos here yet.
+                  <br />
+                  Maybe the first one belongs
+                  here.
+                </p>
 
-            <div className="columns-2 gap-4 sm:columns-3 lg:columns-3 xl:columns-4">
+              </div>
+            )}
 
-              {media.map((item) => (
+            {/* ======================================================
+                MEDIA GALLERY
+            ====================================================== */}
 
-                <div
-                  key={item.media_id}
-                  className="mb-4 break-inside-avoid"
-                >
+            {media.length > 0 && (
+              <div className="columns-2 gap-4 sm:columns-3 lg:columns-3 xl:columns-4">
 
-                  <div className="group relative overflow-hidden rounded-[3px] bg-[#e5ddd3] shadow-[0_4px_20px_rgba(60,40,30,0.05)] transition-all duration-700 hover:-translate-y-1 hover:shadow-[0_12px_35px_rgba(60,40,30,0.10)]">
+                {media.map((item, index) => (
 
-                    {/* ================================================= */}
-                    {/* IMAGE                                             */}
-                    {/* ================================================= */}
+                  <div
+                    key={item.media_id}
+                    className="mb-4 break-inside-avoid"
+                  >
 
-                    {item.type === "image" && (
-                      <img
-                        src={item.signedUrl}
-                        alt="Her wardrobe"
-                        loading="lazy"
-                        className="block h-auto w-full object-contain transition-transform duration-700 ease-out group-hover:scale-[1.025]"
-                      />
-                    )}
+                    <div className="group relative overflow-hidden rounded-[3px] bg-[#e5ddd3] shadow-[0_4px_20px_rgba(60,40,30,0.05)] transition-all duration-700 hover:-translate-y-1 hover:shadow-[0_12px_35px_rgba(60,40,30,0.10)]">
 
-                    {/* ================================================= */}
-                    {/* VIDEO                                             */}
-                    {/* ================================================= */}
+                      {/* ================================================= */}
+                      {/* IMAGE                                             */}
+                      {/* ================================================= */}
 
-                    {item.type === "video" && (
-                      <div className="relative bg-black">
-
-                        <video
+                      {item.type === "image" && (
+                        <img
                           src={item.signedUrl}
-                          controls
-                          playsInline
-                          preload="metadata"
-                          className="block h-auto max-h-[700px] w-full object-contain"
+                          alt="Her wardrobe"
+                          loading={
+                            index < 6
+                              ? "eager"
+                              : "lazy"
+                          }
+                          className="block h-auto w-full object-contain transition-transform duration-700 ease-out group-hover:scale-[1.025]"
                         />
+                      )}
 
-                      </div>
-                    )}
+                      {/* ================================================= */}
+                      {/* VIDEO                                             */}
+                      {/* ================================================= */}
 
-                    {/* Hover overlay */}
+                      {item.type === "video" && (
+                        <div className="relative bg-black">
 
-                    <div className="pointer-events-none absolute inset-0 bg-black/0 transition duration-500 group-hover:bg-black/[0.025]" />
+                          <video
+                            src={item.signedUrl}
+                            controls
+                            playsInline
+                            preload={
+                              index < 4
+                                ? "metadata"
+                                : "none"
+                            }
+                            className="block h-auto max-h-[700px] w-full object-contain"
+                          />
+
+                          {/* Video label */}
+
+                          <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/50 px-3 py-1.5 text-[8px] uppercase tracking-[0.2em] text-white backdrop-blur-sm">
+                            Video
+                          </div>
+
+                        </div>
+                      )}
+
+                      {/* Hover overlay */}
+
+                      <div className="pointer-events-none absolute inset-0 bg-black/0 transition duration-500 group-hover:bg-black/[0.025]" />
+
+                    </div>
 
                   </div>
 
-                </div>
+                ))}
 
-              ))}
-
-            </div>
+              </div>
+            )}
 
           </div>
 
-        </section>
-      )}
+          {/* Scroll hint */}
+
+          {media.length > 0 && (
+            <p className="mt-3 text-center text-[8px] uppercase tracking-[0.25em] text-[#81766d]/60">
+              Scroll inside the collection
+            </p>
+          )}
+
+        </div>
+
+      </section>
 
       {/* ============================================================ */}
       {/* ADD BUTTON                                                    */}
@@ -909,7 +940,8 @@ export default function HerWardrobePage() {
                   </p>
 
                   <p className="mt-4 text-[9px] uppercase tracking-[0.2em] text-[#8b4b3f]">
-                    Images and videos will be uploaded one by one
+                    Images and videos will be
+                    uploaded one by one
                   </p>
 
                 </>
@@ -939,9 +971,9 @@ export default function HerWardrobePage() {
 
             </label>
 
-            {/* ====================================================== */}
-            {/* SELECTED FILES                                          */}
-            {/* ====================================================== */}
+            {/* ======================================================
+                SELECTED FILES
+            ====================================================== */}
 
             {selectedFiles.length > 0 && (
               <div className="mt-5 max-h-[180px] overflow-y-auto rounded-xl bg-[#ebe4da] p-3">
@@ -1013,9 +1045,9 @@ export default function HerWardrobePage() {
               </div>
             )}
 
-            {/* ====================================================== */}
-            {/* PROGRESS                                                */}
-            {/* ====================================================== */}
+            {/* ======================================================
+                PROGRESS
+            ====================================================== */}
 
             {uploading && (
               <div className="mt-5">
@@ -1050,9 +1082,9 @@ export default function HerWardrobePage() {
               </div>
             )}
 
-            {/* ====================================================== */}
-            {/* ERROR                                                   */}
-            {/* ====================================================== */}
+            {/* ======================================================
+                ERROR
+            ====================================================== */}
 
             {uploadError && (
               <div className="mt-4 rounded-lg bg-[#9f3f4d]/5 px-4 py-3">
@@ -1064,9 +1096,9 @@ export default function HerWardrobePage() {
               </div>
             )}
 
-            {/* ====================================================== */}
-            {/* BUTTONS                                                 */}
-            {/* ====================================================== */}
+            {/* ======================================================
+                BUTTONS
+            ====================================================== */}
 
             <div className="mt-7 flex gap-3">
 
