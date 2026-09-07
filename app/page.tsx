@@ -14,6 +14,7 @@ import herImage from "@/assets/her.jpg";
 import hisImage from "@/assets/him.jpg";
 import foodImage from "@/assets/food.jpg";
 import wardrobeImage from "@/assets/wardrobe.jpg";
+import hiswardrobeImage from "@/assets/his_wardrobe.jpg";
 import hairImage from "@/assets/hair.jpg";
 import accessoriesImage from "@/assets/accessories.jpg";
 import homeImage from "@/assets/home.jpg";
@@ -54,6 +55,12 @@ const rooms = [
     name: "Her Wardrobe",
     href: "/collection/her_wardrobe",
     image: wardrobeImage,
+  },
+  {
+    icon: "♢",
+    name: "His Wardrobe",
+    href: "/collection/his_wardrobe",
+    image: hiswardrobeImage,
   },
   {
     icon: "✂",
@@ -106,7 +113,7 @@ const rooms = [
   {
     icon: "✉",
     name: "For Her",
-    href: "/forher",
+    href: "/for-her",
     image: forHerImage,
     wide: true,
   },
@@ -410,4 +417,4 @@ export default function HomePage() {
 
     </main>
   );
-}
+} 
